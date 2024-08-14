@@ -1,5 +1,5 @@
 mod picousb;
-use picousb::{PICO_SECTOR_SIZE, PICO_FLASH_START, PICO_STACK_POINTER};
+use picousb::{PICO_FLASH_START, PICO_SECTOR_SIZE, PICO_STACK_POINTER};
 
 use rusb;
 use uf2_decode::convert_from_uf2;

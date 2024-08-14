@@ -1,5 +1,5 @@
-// This is a barebones implementation of picoboot communication in rust
-// This is intended only to work with the rp2040, but could work with new chips with extra modifications
+// This is a barebones implementation of PICOBOOT communication in rust
+// This is intended only to work with the RP2040, but could work with new chips with extra modifications
 
 use bincode;
 use rusb::{Device, DeviceDescriptor, DeviceHandle, Direction, TransferType, UsbContext};
@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 
 // see https://github.com/raspberrypi/picotool/blob/master/main.cpp#L4173
 // for loading firmware over a connection
+
+// see https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf
+// section 2.8.5 for details on PICOBOOT interface
 
 pub const PICO_SECTOR_SIZE: usize = 256;
 pub const PICO_FLASH_START: u32 = 0x10000000;
@@ -42,7 +45,6 @@ fn open_device<T: UsbContext>(
     None
 }
 
-#[allow(dead_code)]
 #[repr(u8)]
 #[derive(Debug)]
 enum PicobootCmdId {
@@ -388,10 +390,12 @@ impl<T: UsbContext> PicobootConnection<T> {
         self.cmd_token = self.cmd_token + 1;
         let cmd = cmd;
 
+        // write command
         let cmdu8 = bincode::serialize(&cmd).expect("failed to serialize cmd");
         self.bulk_write(cmdu8, true).expect("failed to write cmd");
+        let _stat = self.get_command_status();
 
-        // if we're writing a buffer
+        // if we're reading or writing a buffer
         let l = cmd.transfer_len.try_into().unwrap();
         let mut res: Option<Vec<_>> = Some(vec![]);
         if l != 0 {
@@ -400,8 +404,8 @@ impl<T: UsbContext> PicobootConnection<T> {
             } else {
                 self.bulk_write(buf, true).unwrap()
             }
+            let _stat = self.get_command_status();
         }
-        let _stat = self.get_command_status();
 
         // do ack
         if (cmd.cmd_id & 0x80) != 0 {
@@ -505,7 +509,7 @@ impl<T: UsbContext> PicobootConnection<T> {
             tkn,
             PicobootStatus::try_from(stat).unwrap(),
             PicobootCmdId::try_from(cmdid).unwrap(),
-            wip
+            wip == 1
         );
 
         buf
