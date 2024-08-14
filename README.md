@@ -1,4 +1,4 @@
-# picoboot-rs - Communicating with RP2040 devices in BOOTSEL mode
+# usb-picoboot-rs - Communicating with RP2040 devices in BOOTSEL mode
 ## Disclaimer
 - This project is intended as example code or reference implementation for communicating with Raspberry Pi Pico 1 devices directly over the PICOBOOT USB interface. This interface is exposed when the RP2040 is in BOOTSEL mode, alongside the pseudo-mass-storage-device that can also be used for flashing firmware onto a Pico device in BOOTSEL mode.
 - The PICOBOOT USB interface is described in the [RP2040 datasheet](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf) under section 2.8.5.
