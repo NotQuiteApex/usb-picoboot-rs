@@ -279,9 +279,9 @@ impl<T: UsbContext> PicobootConnection<T> {
                     _ => false,
                 };
 
-                handle
-                    .set_active_configuration(cfg)
-                    .expect("could not configure handle");
+                if !handle.set_active_configuration(cfg).is_ok() {
+                    println!("Warning: could not set USB active configuration");
+                }
                 handle
                     .claim_interface(iface)
                     .expect("could not claim interface");
