@@ -1,5 +1,5 @@
 mod picousb;
-use picousb::{PICO_FLASH_START, PICO_SECTOR_SIZE, PICO_STACK_POINTER};
+use picousb::{PICO_FLASH_START, PICO_PAGE_SIZE, PICO_SECTOR_SIZE, PICO_STACK_POINTER};
 
 use rusb;
 use uf2_decode::convert_from_uf2;
@@ -8,10 +8,10 @@ fn uf2_sectors(bytes: Vec<u8>) -> Result<Vec<Vec<u8>>, ()> {
     let fw = convert_from_uf2(&bytes).map_err(|_| ())?.0;
     let mut fw_sectors: Vec<Vec<u8>> = vec![];
     let len = fw.len();
-    for i in (0..len).step_by(PICO_SECTOR_SIZE) {
-        let size = std::cmp::min(len - i, PICO_SECTOR_SIZE);
+    for i in (0..len).step_by(PICO_PAGE_SIZE) {
+        let size = std::cmp::min(len - i, PICO_PAGE_SIZE);
         let mut sect = fw[i..i + size].to_vec();
-        sect.resize(PICO_SECTOR_SIZE, 0);
+        sect.resize(PICO_PAGE_SIZE, 0);
         fw_sectors.push(sect);
     }
     Ok(fw_sectors)
@@ -41,15 +41,22 @@ fn main() {
             conn.access_exclusive_eject()
                 .expect("failed to claim access");
             println!("claimed access");
+            let mut erased_sectors = vec!();
 
             for (i, sect) in fw_sectors.iter().enumerate() {
-                let addr = (i * PICO_SECTOR_SIZE) as u32 + PICO_FLASH_START;
-                let size = PICO_SECTOR_SIZE as u32;
+                let addr = (i * PICO_PAGE_SIZE) as u32 + PICO_FLASH_START;
+                let size = PICO_PAGE_SIZE as u32;
                 println!("performing ops on addr={:#X}", addr);
 
-                println!("\terasing flash");
-                conn.flash_erase(addr, size).expect("failed to erase flash");
-                println!("\terase flash success");
+                // Erase is by sector. Addresses must be on sector boundary
+                let sector_addr = addr - (addr % PICO_SECTOR_SIZE);
+                if !erased_sectors.contains(&sector_addr) {
+                    // Sector hasn't been erased yet, erase it now
+                    println!("\terasing flash");
+                    conn.flash_erase(addr, PICO_SECTOR_SIZE).expect("failed to erase flash");
+                    println!("\terase flash success");
+                    erased_sectors.push(sector_addr);
+                }
 
                 println!("\twriting flash");
                 conn.flash_write(addr, sect.to_vec())
@@ -62,10 +69,10 @@ fn main() {
 
                 println!("\tcomparing flash and expected");
                 let matching = sect.iter().zip(&read).filter(|&(a, b)| a == b).count();
-                if matching != PICO_SECTOR_SIZE {
+                if matching != PICO_PAGE_SIZE {
                     panic!(
                         "sector failed to match (expected {}, got {})",
-                        PICO_SECTOR_SIZE, matching
+                        PICO_PAGE_SIZE, matching
                     )
                 }
                 println!("\ttotal success");
