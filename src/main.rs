@@ -36,6 +36,7 @@ fn main() {
             conn.access_exclusive_eject()
                 .expect("failed to claim access");
             println!("claimed access");
+            conn.exit_xip().expect("failed to exit from xip mode");
 
             for (i, sect) in fw_sectors.iter().enumerate() {
                 let addr = (i * PICO_SECTOR_SIZE) as u32 + PICO_FLASH_START;
