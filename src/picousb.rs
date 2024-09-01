@@ -15,7 +15,8 @@ pub const PICO_SECTOR_SIZE: usize = 256;
 pub const PICO_FLASH_START: u32 = 0x10000000;
 pub const PICO_STACK_POINTER: u32 = 0x20042000;
 const PICOBOOT_VID: u16 = 0x2E8A;
-const PICOBOOT_PID: u16 = 0x0003;
+const PICOBOOT_PID_RP2040: u16 = 0x0003;
+const PICOBOOT_PID_RP2350:u16 = 0x000f;
 const PICOBOOT_MAGIC: u32 = 0x431FD10B;
 
 fn open_device<T: UsbContext>(
@@ -256,7 +257,7 @@ impl<T: UsbContext> Drop for PicobootConnection<T> {
 }
 impl<T: UsbContext> PicobootConnection<T> {
     pub fn new(mut ctx: T) -> Self {
-        match open_device(&mut ctx, PICOBOOT_VID, PICOBOOT_PID) {
+        match open_device(&mut ctx, PICOBOOT_VID, PICOBOOT_PID_RP2040) {
             Some((device, desc, handle)) => {
                 let (_cfg, _iface, _setting, in_addr) =
                     Self::get_endpoint(&device, 0xFF, 0, 0, Direction::In, TransferType::Bulk)
