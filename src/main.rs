@@ -68,9 +68,15 @@ fn main() {
 
             println!("sector success!!!");
 
-            // reboot device
-            conn.reboot(0x0, PICO_STACK_POINTER, 500)
-                .expect("failed to reboot device"); // sp is SRAM_END_RP2040
+            match conn.get_device_type().expect("No known RP chip found") {
+                picousb::TargetID::Rp2040 => {
+                    conn.reboot(0x0, PICO_STACK_POINTER, 500)
+                        .expect("failed to reboot device"); // sp is SRAM_END_RP2040
+                },
+                picousb::TargetID::Rp2350 => {
+                    todo!()
+                }
+            }
 
             println!("reboot success");
         }

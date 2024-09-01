@@ -19,6 +19,12 @@ const PICOBOOT_PID_RP2040: u16 = 0x0003;
 const PICOBOOT_PID_RP2350:u16 = 0x000f;
 const PICOBOOT_MAGIC: u32 = 0x431FD10B;
 
+#[derive(Debug, Clone, Copy)]
+pub enum TargetID {
+    Rp2040,
+    Rp2350
+}
+
 fn open_device<T: UsbContext>(
     ctx: &mut T,
     vid: u16,
@@ -240,6 +246,7 @@ pub struct PicobootConnection<T: UsbContext> {
 
     cmd_token: u32,
     has_kernel_driver: bool,
+    target_id: Option<TargetID>
 }
 
 impl<T: UsbContext> Drop for PicobootConnection<T> {
@@ -257,7 +264,20 @@ impl<T: UsbContext> Drop for PicobootConnection<T> {
 }
 impl<T: UsbContext> PicobootConnection<T> {
     pub fn new(mut ctx: T) -> Self {
-        match open_device(&mut ctx, PICOBOOT_VID, PICOBOOT_PID_RP2040) {
+        let mut d = open_device(&mut ctx, PICOBOOT_VID, PICOBOOT_PID_RP2040);
+        let target_id = if d.is_some() {
+            println!("found rp2040");
+            Some(TargetID::Rp2040)
+        } else {
+            d = open_device(&mut ctx, PICOBOOT_VID, PICOBOOT_PID_RP2350);
+            if d.is_some(){
+                println!("found rp2350");
+                Some(TargetID::Rp2350)
+            } else {
+                None
+            }
+        };
+        match d {
             Some((device, desc, handle)) => {
                 let (_cfg, _iface, _setting, in_addr) =
                     Self::get_endpoint(&device, 0xFF, 0, 0, Direction::In, TransferType::Bulk)
@@ -304,6 +324,7 @@ impl<T: UsbContext> PicobootConnection<T> {
 
                     cmd_token: 1,
                     has_kernel_driver: has_kernel_driver,
+                    target_id: target_id
                 };
             }
             None => panic!("Could not find picoboot device."),
@@ -514,5 +535,9 @@ impl<T: UsbContext> PicobootConnection<T> {
         );
 
         buf
+    }
+
+    pub fn get_device_type(&self)-> Option<TargetID> {
+        self.target_id
     }
 }
