@@ -18,16 +18,21 @@ fn uf2_sectors(bytes: Vec<u8>) -> Result<Vec<Vec<u8>>, ()> {
 }
 
 fn main() {
-    // firmware in a big vector of u8's
-    let fw = std::fs::read("fw_blink.uf2").unwrap();
-    let fw_sectors = uf2_sectors(fw).unwrap();
-
     match rusb::Context::new() {
         Ok(ctx) => {
             // create connection object
             let mut conn = picousb::PicobootConnection::new(ctx);
 
             println!("Connected to PicoBoot!");
+
+            // firmware in a big vector of u8's
+            let fw_name = match conn.get_device_type() {
+                Some(picousb::TargetID::Rp2040) => "fw_blink.uf2",
+                Some(picousb::TargetID::Rp2350) => "fw_blink_rp2350.uf2",
+                None => panic!("No known RP device connected"),
+            };
+            let fw = std::fs::read(fw_name).unwrap();
+            let fw_sectors = uf2_sectors(fw).unwrap();
 
             println!("resetting interface");
             conn.reset_interface();
@@ -72,9 +77,9 @@ fn main() {
                 picousb::TargetID::Rp2040 => {
                     conn.reboot(0x0, PICO_STACK_POINTER, 500)
                         .expect("failed to reboot device"); // sp is SRAM_END_RP2040
-                },
+                }
                 picousb::TargetID::Rp2350 => {
-                    todo!()
+                    conn.reboot2_normal(500).expect("failed to reboot device")
                 }
             }
 
