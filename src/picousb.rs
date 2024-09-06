@@ -11,12 +11,20 @@ use serde::{Deserialize, Serialize};
 // see https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf
 // section 2.8.5 for details on PICOBOOT interface
 
-pub const PICO_SECTOR_SIZE: usize = 256;
+pub const PICO_PAGE_SIZE: usize = 256;
+pub const PICO_SECTOR_SIZE: u32 = 4096;
 pub const PICO_FLASH_START: u32 = 0x10000000;
 pub const PICO_STACK_POINTER: u32 = 0x20042000;
 const PICOBOOT_VID: u16 = 0x2E8A;
-const PICOBOOT_PID: u16 = 0x0003;
+const PICOBOOT_PID_RP2040: u16 = 0x0003;
+const PICOBOOT_PID_RP2350: u16 = 0x000f;
 const PICOBOOT_MAGIC: u32 = 0x431FD10B;
+
+#[derive(Debug, Clone, Copy)]
+pub enum TargetID {
+    Rp2040,
+    Rp2350,
+}
 
 fn open_device<T: UsbContext>(
     ctx: &mut T,
@@ -188,6 +196,31 @@ impl PicobootRebootCmd {
     }
 }
 
+#[derive(Serialize)]
+#[repr(C, packed)]
+struct PicobootReboot2Cmd {
+    flags: u32,
+    delay: u32,
+    p0: u32,
+    p1: u32,
+}
+impl PicobootReboot2Cmd {
+    pub fn ser(flags: u32, delay: u32, p0: u32, p1: u32) -> [u8; 16] {
+        let c = PicobootReboot2Cmd {
+            flags,
+            delay,
+            p0,
+            p1,
+        };
+        bincode::serialize(&c)
+            .unwrap()
+            .try_into()
+            .unwrap_or_else(|v: Vec<u8>| {
+                panic!("Expected a Vec of length {} but it was {}", 16, v.len())
+            })
+    }
+}
+
 #[derive(Deserialize)]
 #[repr(C, packed)]
 struct PicobootStatusCmd {
@@ -239,6 +272,7 @@ pub struct PicobootConnection<T: UsbContext> {
 
     cmd_token: u32,
     has_kernel_driver: bool,
+    target_id: Option<TargetID>,
 }
 
 impl<T: UsbContext> Drop for PicobootConnection<T> {
@@ -256,7 +290,20 @@ impl<T: UsbContext> Drop for PicobootConnection<T> {
 }
 impl<T: UsbContext> PicobootConnection<T> {
     pub fn new(mut ctx: T) -> Self {
-        match open_device(&mut ctx, PICOBOOT_VID, PICOBOOT_PID) {
+        let mut d = open_device(&mut ctx, PICOBOOT_VID, PICOBOOT_PID_RP2040);
+        let target_id = if d.is_some() {
+            println!("found rp2040");
+            Some(TargetID::Rp2040)
+        } else {
+            d = open_device(&mut ctx, PICOBOOT_VID, PICOBOOT_PID_RP2350);
+            if d.is_some() {
+                println!("found rp2350");
+                Some(TargetID::Rp2350)
+            } else {
+                None
+            }
+        };
+        match d {
             Some((device, desc, handle)) => {
                 let (_cfg, _iface, _setting, in_addr) =
                     Self::get_endpoint(&device, 0xFF, 0, 0, Direction::In, TransferType::Bulk)
@@ -279,9 +326,9 @@ impl<T: UsbContext> PicobootConnection<T> {
                     _ => false,
                 };
 
-                handle
-                    .set_active_configuration(cfg)
-                    .expect("could not configure handle");
+                if !handle.set_active_configuration(cfg).is_ok() {
+                    println!("Warning: could not set USB active configuration");
+                }
                 handle
                     .claim_interface(iface)
                     .expect("could not claim interface");
@@ -303,6 +350,7 @@ impl<T: UsbContext> PicobootConnection<T> {
 
                     cmd_token: 1,
                     has_kernel_driver: has_kernel_driver,
+                    target_id: target_id,
                 };
             }
             None => panic!("Could not find picoboot device."),
@@ -442,6 +490,13 @@ impl<T: UsbContext> PicobootConnection<T> {
         Ok(self.cmd(cmd, vec![]).map(|_| ())?)
     }
 
+    pub fn reboot2_normal(&mut self, delay: u32) -> rusb::Result<()> {
+        let flags: u32 = 0x0; // Normal boot
+        let args = PicobootReboot2Cmd::ser(flags, delay, 0, 0);
+        let cmd = PicobootCmd::new(PicobootCmdId::Reboot2, 0x10, 0, args);
+        Ok(self.cmd(cmd, vec![]).map(|_| ())?)
+    }
+
     pub fn flash_erase(&mut self, addr: u32, size: u32) -> rusb::Result<()> {
         let args = PicobootRangeCmd::ser(addr, size);
         let cmd = PicobootCmd::new(PicobootCmdId::FlashErase, 8, 0, args);
@@ -525,5 +580,9 @@ impl<T: UsbContext> PicobootConnection<T> {
         );
 
         buf
+    }
+
+    pub fn get_device_type(&self) -> Option<TargetID> {
+        self.target_id
     }
 }
