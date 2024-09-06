@@ -460,7 +460,6 @@ impl<T: UsbContext> PicobootConnection<T> {
         self.cmd(cmd, vec![])
     }
 
-    #[allow(dead_code)]
     pub fn enter_xip(&mut self) -> rusb::Result<()> {
         let args = [0; 16];
         let cmd = PicobootCmd::new(PicobootCmdId::EnterCmdXip, 0, 0, args);
