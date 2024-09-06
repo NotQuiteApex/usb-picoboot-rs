@@ -515,6 +515,18 @@ impl<T: UsbContext> PicobootConnection<T> {
         self.cmd(cmd, vec![])
     }
 
+    pub fn enter_xip(&mut self) -> rusb::Result<()> {
+        let args = [0; 16];
+        let cmd = PicobootCmd::new(PicobootCmdId::EnterCmdXip, 0, 0, args);
+        Ok(self.cmd(cmd, vec![]).map(|_| ())?)
+    }
+
+    pub fn exit_xip(&mut self) -> rusb::Result<()> {
+        let args = [0; 16];
+        let cmd = PicobootCmd::new(PicobootCmdId::ExitXip, 0, 0, args);
+        Ok(self.cmd(cmd, vec![]).map(|_| ())?)
+    }
+
     pub fn reset_interface(&mut self) {
         self.handle
             .clear_halt(self.in_addr)

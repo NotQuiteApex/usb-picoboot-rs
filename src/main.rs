@@ -41,6 +41,8 @@ fn main() {
             conn.access_exclusive_eject()
                 .expect("failed to claim access");
             println!("claimed access");
+            conn.exit_xip().expect("failed to exit from xip mode");
+
             let mut erased_sectors = vec!();
 
             for (i, page) in fw_pages.iter().enumerate() {
